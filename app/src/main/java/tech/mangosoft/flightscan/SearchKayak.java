@@ -14,18 +14,39 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Toast;
 
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.io.BufferedWriter;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.io.UnsupportedEncodingException;
+import java.net.HttpURLConnection;
 import java.net.InetAddress;
+import java.net.MalformedURLException;
 import java.net.NetworkInterface;
+import java.net.ProtocolException;
 import java.net.SocketException;
+import java.net.URL;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
+
+import javax.net.ssl.HttpsURLConnection;
 
 public class SearchKayak extends AppCompatActivity {
+
+    private int appState = APP_STATE_LOADING;
+    public static int APP_STATE_LOADING = 0;
+    public static int APP_STATE_SEARCHING = 1;
+    public static int APP_STATE_LOOKING_FOR_RESULTS = 2;
+    public static int APP_STATE_RESULTS_FOUND = 3;
 
     List<String> resources = new LinkedList<String>();
 
@@ -68,6 +89,13 @@ public class SearchKayak extends AppCompatActivity {
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
 
+                appState = APP_STATE_SEARCHING;
+
+                if (url.contains("transport/flights")) {
+                    appState = APP_STATE_LOOKING_FOR_RESULTS;
+                }
+
+
                 injectScriptFile(view, "script.js"); // see below ...
 
                 // test if the script was loaded
@@ -89,6 +117,16 @@ public class SearchKayak extends AppCompatActivity {
                     input.read(buffer);
                     input.close();
 
+                    String execution = null;
+
+                    if (appState == APP_STATE_SEARCHING) {
+                        execution = "searchFormSubmission()";
+                    } else if (appState == APP_STATE_LOOKING_FOR_RESULTS) {
+                        execution = "executeCheckFoundResults()";
+                    }
+
+
+
                     // String-ify the script byte-array using BASE64 encoding !!!
                     String encoded = Base64.encodeToString(buffer, Base64.NO_WRAP);
                     view.evaluateJavascript("javascript:(function() {" +
@@ -98,7 +136,7 @@ public class SearchKayak extends AppCompatActivity {
                             // Tell the browser to BASE64-decode the string into your script !!!
                             "script.innerHTML = window.atob('" + encoded + "');" +
                             "let as = parent.appendChild(script);" +
-//                            "return  setTimeout(function() {searchFormSubmission(); }, 500); "+
+                            ((execution != null) ? "return  setTimeout(function() {" + execution + "; }, 500); " : "" )+
                             "})()", new ValueCallback<String>(){
                             @Override
                             public void onReceiveValue(String s) {
@@ -107,7 +145,7 @@ public class SearchKayak extends AppCompatActivity {
                     });
                 } catch (IOException e) {
                     // TODO Auto-generated catch block
-                    e.printStackTrace();
+                    Toast.makeText(getApplicationContext(), "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
                 }
             }
         });
@@ -133,6 +171,7 @@ public class SearchKayak extends AppCompatActivity {
                 }
             }
         } catch (SocketException ex) {
+            Toast.makeText(getApplicationContext(), "Error: " + ex.getMessage(), Toast.LENGTH_SHORT).show();
             Log.e("error", ex.toString());
         }
         return null;
@@ -153,6 +192,58 @@ public class SearchKayak extends AppCompatActivity {
         public void showToast(String toast) {
             Toast.makeText(mContext, toast, Toast.LENGTH_SHORT).show();
         }
+
+        @JavascriptInterface
+        public void uploadParsedResults(String jsonString) {
+            Toast.makeText(mContext, jsonString, Toast.LENGTH_LONG).show();
+            try {
+                JSONArray data = new JSONArray(jsonString);
+                System.out.println(data.length());
+                System.out.println(jsonString);
+                sendJSONPDataToServer(jsonString);
+                appState = APP_STATE_RESULTS_FOUND;
+            } catch (JSONException e) {
+                Toast.makeText(mContext, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+
+            }
+        }
+
+        private void  sendJSONPDataToServer(String data) {
+            URL url = null;
+            try {
+                url = new URL("http://192.168.1.81:8080/flight");
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn.setReadTimeout(10000);
+                conn.setConnectTimeout(15000);
+                conn.setRequestMethod("POST");
+                conn.setDoInput(true);
+                conn.setDoOutput(true);
+                conn.addRequestProperty("Accept", "application/json");
+                conn.addRequestProperty("Content-Type", "application/json");
+
+                OutputStream os = conn.getOutputStream();
+                BufferedWriter writer = new BufferedWriter(
+                        new OutputStreamWriter(os, "UTF-8"));
+                //writer.write(getQuery(params));
+                writer.write(data);
+                writer.flush();
+                writer.close();
+                os.close();
+
+                conn.connect();
+                conn.getResponseMessage();
+            } catch (MalformedURLException e) {
+                Toast.makeText(mContext, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            } catch (UnsupportedEncodingException e) {
+                Toast.makeText(mContext, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            } catch (ProtocolException e) {
+                Toast.makeText(mContext, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            } catch (IOException e) {
+                Toast.makeText(mContext, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            }
+        }
+
+
     }
 
 }

@@ -20,6 +20,13 @@ var getRandDelay = function(){
 
 function showAndroidToast(toast) { Android.showToast(toast); };
 
+
+
+var uploadParsedResults = function(data){
+    let st = JSON.stringify(data);
+    Android.uploadParsedResults(st);
+}
+
 var triggerReactEvent = function(input, value){
     let lastValue = input.value;
     input.value = value;
@@ -49,13 +56,32 @@ var getElementByXPath = function(xpath, startNode) {
 //skyscanner functions
 //day-list-total
 
-var timer = setInterval(function() {
-    let element = getElementByXPath("//div[contains(@class,'day-list-total')]");
-    let d = (element != null)? element.textContent : "";
-    showAndroidToast("day-list-total:" + d );
+var executeCheckFoundResults = function() {
+    var timer = setInterval(function() {
+        let d = checkFoundResults();
+        showAndroidToast("day-list-total:" + d );
 
-    if (false) clearInterval(timer);
-  }, 2000);
+        if (d != "") {
+            clearInterval(timer);
+            let data = getPricesFromSkyScrapper();
+            uploadParsedResults(data);
+        }
+      }, 2000);
+}
+
+var checkFoundResults = function() {
+    let element = getElementByXPath("//div[contains(@class,'day-list-total')]");
+
+    let d = "";
+    if (element != null) {
+        let patt = /(\d+) results/g;
+        let parsing = patt.exec(element.textContent);
+        if (parsing != null) {
+            d = parsing[1];
+        }
+    }
+    return d;
+}
 
 function searchFormSubmission(){
 
@@ -86,7 +112,6 @@ function searchFormSubmission(){
                     //click on submit button
                     getElementByXPath('//button[contains(@class,"fss-bpk-button--large")]').click();
                     showAndroidToast("form submitted");
-
                 }, getRandDelay());
             }, getRandDelay());
         }, getRandDelay());
@@ -99,6 +124,12 @@ function searchFormSubmission(){
 }
 
 var getPricesFromSkyScrapper = function(){
+    let flights = [];
+    let i = 0;
+
+    //let's store Ip address info as 0 object
+    flights[i++] = ipData;
+
 
     let elements = getElementsByXPath('//li[contains(@class,"day-list-item")]');
 
@@ -113,11 +144,12 @@ var getPricesFromSkyScrapper = function(){
         let airline = (airlinesElement != null) ? airlinesElement.textContent : "";
         let priceC = (priceElement != null) ? priceElement.textContent: "";
 
-      alertText += airline + " - " + priceC + "\n";
+        alertText += airline + " - " + priceC + "\n";
 
-      currentElement = elements.iterateNext();
+        flights[i++] = { line : airline, price: priceC};
+        currentElement = elements.iterateNext();
     }
-    return alertText;
+    return flights;
 }
 
 
@@ -161,3 +193,16 @@ function tapOnElement( el ) {
 
         dispatchEvent(event);
 }
+
+var ipData = null;
+
+function updateIpData(data)
+{
+    // save ip data on load
+    ipData = data;
+}
+
+var s1 = document.createElement('script');
+s1.src = '//freegeoip.net/json/?callback=updateIpData'
+
+document.getElementsByTagName('head')[0].appendChild(s1);
