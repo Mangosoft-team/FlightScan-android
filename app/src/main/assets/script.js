@@ -70,7 +70,8 @@ var executeCheckFoundResults = function() {
 }
 
 var checkFoundResults = function() {
-    let element = getElementByXPath("//div[contains(@class,'day-list-total')]");
+    //getElementByXPath('//*[@id="fqs-tabs"]//td[@class="tab" and @data-tab="price"]').click();
+    let element = getElementByXPath("//div[contains(@class,'day-list-total') or contains(@id,'header-list-count') or contains(@class,'day-list-count')]");
 
     let d = "";
     if (element != null) {
@@ -83,14 +84,14 @@ var checkFoundResults = function() {
     return d;
 }
 
-function searchFormSubmission(){
+function searchFormSubmission(from, to, datefrom, dateto){
 
     showAndroidToast("search form start");
 
     //origin input
-    triggerReactEvent(document.getElementById('js-origin-input'), 'ATL');
+    triggerReactEvent(document.getElementById('js-origin-input'), from);
 
-    showAndroidToast("origin airport selected");
+    showAndroidToast("origin airport selected " + from);
 
 
     setTimeout(function() {
@@ -102,16 +103,24 @@ function searchFormSubmission(){
         setTimeout(function() {
 
             //destination
-            triggerReactEvent(document.getElementById('js-destination-input'), 'MSK');
-            showAndroidToast("typed MSK");
+            triggerReactEvent(document.getElementById('js-destination-input'), to);
+            showAndroidToast("typed " + to);
             setTimeout(function() {
                 //click on first element in destination dropdown
                 getElementByXPath('(//div[contains(@class,"-dataset-destination")]//*[contains(@class,"airport")])[1]').click();
                 showAndroidToast("click on first destination in the list");
                 setTimeout(function() {
-                    //click on submit button
-                    getElementByXPath('//button[contains(@class,"fss-bpk-button--large")]').click();
-                    showAndroidToast("form submitted");
+                    selectOriginDate(datefrom);
+                    showAndroidToast("selected departure date" + datefrom);
+                    setTimeout(function() {
+                        selectReturnDate(dateto);
+                        showAndroidToast("selected return date" + dateto);
+                        setTimeout(function() {
+                            //click on submit button
+                            getElementByXPath('//button[contains(@class,"fss-bpk-button--large")]').click();
+                            showAndroidToast("form submitted");
+                        }, getRandDelay());
+                    }, getRandDelay());
                 }, getRandDelay());
             }, getRandDelay());
         }, getRandDelay());
@@ -152,6 +161,15 @@ var getPricesFromSkyScrapper = function(){
     return flights;
 }
 
+var selectOriginDate = function(dateOrigin){
+    getElementByXPath('//input[@id="js-depart-input"]').click();
+    getElementByXPath('//div[contains(@class, "skyscanner-datepicker depart")]//td[@data-id="' + dateOrigin + '"]').click();
+}
+
+var selectReturnDate = function(dateReturn){
+    getElementByXPath('//input[@id="js-return-input"]').click();
+    getElementByXPath('//div[contains(@class, "skyscanner-datepicker return")]//td[@data-id="' + dateReturn + '"]').click();
+}
 
 function getOffset( el ) {
     var _x = 0;

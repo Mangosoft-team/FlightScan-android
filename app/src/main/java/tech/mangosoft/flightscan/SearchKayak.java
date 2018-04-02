@@ -18,10 +18,12 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.UnsupportedEncodingException;
@@ -47,6 +49,15 @@ public class SearchKayak extends AppCompatActivity {
     public static int APP_STATE_SEARCHING = 1;
     public static int APP_STATE_LOOKING_FOR_RESULTS = 2;
     public static int APP_STATE_RESULTS_FOUND = 3;
+    public static int APP_STATE_DATE_ORIGIN_SELECTION = 4;
+    public static int APP_STATE_DATE_RETURN_SELECTION = 5;
+
+    private String lastUrl = null;
+
+    private String from = "KBP";
+    private String to = "ATL";
+    private String datefrom = "2018-04-21";
+    private String datereturn = "2018-04-29";
 
     List<String> resources = new LinkedList<String>();
 
@@ -95,8 +106,9 @@ public class SearchKayak extends AppCompatActivity {
                     appState = APP_STATE_LOOKING_FOR_RESULTS;
                 }
 
-
-                injectScriptFile(view, "script.js"); // see below ...
+                if (!url.equals(lastUrl)) {
+                    injectScriptFile(view, "script.js");
+                }
 
                 // test if the script was loaded
 /*               view.evaluateJavascript("(function() { return searchFormSubmission(); })();", new ValueCallback<String>() {
@@ -107,6 +119,7 @@ public class SearchKayak extends AppCompatActivity {
                });
                */
 
+                lastUrl = url;
             }
 
             private void injectScriptFile(WebView view, String scriptFile) {
@@ -120,7 +133,7 @@ public class SearchKayak extends AppCompatActivity {
                     String execution = null;
 
                     if (appState == APP_STATE_SEARCHING) {
-                        execution = "searchFormSubmission()";
+                        execution = "searchFormSubmission('" + from + "', '" + to +"', '" + datefrom + "', '" + datereturn + "' )";
                     } else if (appState == APP_STATE_LOOKING_FOR_RESULTS) {
                         execution = "executeCheckFoundResults()";
                     }
@@ -211,10 +224,10 @@ public class SearchKayak extends AppCompatActivity {
         private void  sendJSONPDataToServer(String data) {
             URL url = null;
             try {
-                url = new URL("http://192.168.1.81:8080/flight");
+                url = new URL("http://192.168.1.81:8080/flight/multiple");
                 HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                conn.setReadTimeout(10000);
-                conn.setConnectTimeout(15000);
+                conn.setReadTimeout(100000);
+                conn.setConnectTimeout(150000);
                 conn.setRequestMethod("POST");
                 conn.setDoInput(true);
                 conn.setDoOutput(true);
@@ -231,14 +244,45 @@ public class SearchKayak extends AppCompatActivity {
                 os.close();
 
                 conn.connect();
-                conn.getResponseMessage();
+                String encoding = conn.getContentEncoding();
+
+                BufferedReader streamReader = new BufferedReader(new InputStreamReader(conn.getInputStream(), "UTF-8"));
+                StringBuilder responseStrBuilder = new StringBuilder();
+
+                String inputStr;
+                while ((inputStr = streamReader.readLine()) != null)
+                    responseStrBuilder.append(inputStr);
+                String s = responseStrBuilder.toString();
+                JSONArray obj = null;
+                try {
+                    obj = new JSONArray(responseStrBuilder.toString());
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
+
+                if (obj != null) {
+                    obj.length();
+                    System.out.println("Response: " + obj.length() + " elements were saved" );
+                    Toast.makeText(mContext, "Error: " + "Response: " + obj.length() + " elements were saved" , Toast.LENGTH_LONG).show();
+                } else {
+                    //error - nothing got
+                    Toast.makeText(mContext, "Error: " + "Response code: " +  conn.getResponseCode(), Toast.LENGTH_LONG).show();
+                    System.out.println("Response code: " +  conn.getResponseCode());
+                }
+
+
+
             } catch (MalformedURLException e) {
+                System.out.println("Response was: " + e.getMessage());
                 Toast.makeText(mContext, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
             } catch (UnsupportedEncodingException e) {
+                System.out.println("Response was: " + e.getMessage());
                 Toast.makeText(mContext, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
             } catch (ProtocolException e) {
+                System.out.println("Response was: " + e.getMessage());
                 Toast.makeText(mContext, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
             } catch (IOException e) {
+                System.out.println("Response was: " + e.getMessage());
                 Toast.makeText(mContext, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
             }
         }
