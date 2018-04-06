@@ -15,7 +15,7 @@ if(!!window.Zepto) console.log('Zepto.js');
 if(!!window.jQuery) console.log('jQuery.js');
 
 var getRandDelay = function(){
- return Math.floor(500 + (Math.random() * 1000) );
+ return Math.floor(1500 + (Math.random() * 1000) );
 }
 
 function showAndroidToast(toast) { Android.showToast(toast); };
@@ -63,14 +63,17 @@ var executeCheckFoundResults = function() {
 
         if (d != "") {
             clearInterval(timer);
-            let data = getPricesFromSkyScrapper();
-            uploadParsedResults(data);
+            getElementByXPath('//td[@class="tab" and @data-tab="price"]/button').click();
+            setTimeout(function() {
+                let data = getPricesFromSkyScrapper();
+                uploadParsedResults(data);
+            }, 3000 + getRandDelay());
         }
       }, 2000);
 }
 
 var checkFoundResults = function() {
-    //getElementByXPath('//*[@id="fqs-tabs"]//td[@class="tab" and @data-tab="price"]').click();
+
     let element = getElementByXPath("//div[contains(@class,'day-list-total') or contains(@id,'header-list-count') or contains(@class,'day-list-count')]");
 
     let d = "";
@@ -89,9 +92,16 @@ function searchFormSubmission(from, to, datefrom, dateto){
     showAndroidToast("search form start");
 
     //origin input
-    triggerReactEvent(document.getElementById('js-origin-input'), from);
+    if (document.getElementById('js-origin-input') != null) {
+        triggerReactEvent(document.getElementById('js-origin-input'), from);
+        showAndroidToast("origin airport selected " + from);
+    }
+    if (document.getElementById('origin-fsc-search') != null) {
+        triggerReactEvent(document.getElementById('origin-fsc-search'), from);
+        showAndroidToast("origin airport selected 2 " + from);
+    }
 
-    showAndroidToast("origin airport selected " + from);
+
 
 
     setTimeout(function() {
@@ -103,8 +113,17 @@ function searchFormSubmission(from, to, datefrom, dateto){
         setTimeout(function() {
 
             //destination
-            triggerReactEvent(document.getElementById('js-destination-input'), to);
-            showAndroidToast("typed " + to);
+            if (document.getElementById('js-destination-input') != null) {
+                triggerReactEvent(document.getElementById('js-destination-input'), to);
+                showAndroidToast("typed " + to);
+        }
+            if (document.getElementById('destination-fsc-search') != null) {
+                triggerReactEvent(document.getElementById('destination-fsc-search'), to);
+                showAndroidToast("typed 2 " + to);
+            }
+
+
+
             setTimeout(function() {
                 //click on first element in destination dropdown
                 getElementByXPath('(//div[contains(@class,"-dataset-destination")]//*[contains(@class,"airport")])[1]').click();
@@ -153,12 +172,44 @@ var getPricesFromSkyScrapper = function(){
         let airline = (airlinesElement != null) ? airlinesElement.textContent : "";
         let priceC = (priceElement != null) ? priceElement.textContent: "";
 
+        let originDetails = null;
+        let returnDetails = null;
+
         alertText += airline + " - " + priceC + "\n";
 
-        flights[i++] = { line : airline, price: priceC};
+        let legInfos  = getElementsByXPath('.//div[contains(@class, "leg-info")]', currentElement);
+        let currentLegInfos = legInfos.iterateNext();
+        while (currentLegInfos) {
+          console.log(currentLegInfos);
+          if (originDetails == null) {
+            originDetails = getInfoDetails(currentLegInfos);
+          } else if (returnDetails == null) {
+            returnDetails = getInfoDetails(currentLegInfos);
+          }
+          currentLegInfos = legInfos.iterateNext();
+        }
+
+
+        flights[i++] = { line : airline, price: priceC,
+                        origin: originDetails, returning:returnDetails};
         currentElement = elements.iterateNext();
     }
     return flights;
+}
+
+
+var getInfoDetails =  function(current) {
+
+    let departureTime = getElementByXPath('.//div[contains(@class, "leg-depart")]/span[contains(@class, "times")]/text()', current).textContent;
+    let departureCity = getElementByXPath('.//div[contains(@class, "leg-depart")]/span[contains(@data-e2e, "city")]/span/text()', current).textContent;
+    let stops = getElementByXPath('.//div[contains(@class, "leg-stops")]/div/span[contains(@class, "stops-label")]/text()', current).textContent;
+    let duration = getElementByXPath('.//div[contains(@class, "leg-stops")]/span[contains(@class, "duration")]/text()', current).textContent;
+    let arriveTime = getElementByXPath('.//div[contains(@class, "leg-arrive")]/span[contains(@class, "times")]/text()', current).textContent;
+    let destinationCity = getElementByXPath('.//div[contains(@class, "leg-arrive")]/span[contains(@data-e2e, "city")]/span/text()', current).textContent;
+
+    return {departureTime: departureTime, departureCity:departureCity, stops:stops, duration:duration,
+        arriveTime:arriveTime, destinationCity:destinationCity};
+
 }
 
 var selectOriginDate = function(dateOrigin){

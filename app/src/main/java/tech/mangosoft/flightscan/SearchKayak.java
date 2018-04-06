@@ -1,10 +1,13 @@
 package tech.mangosoft.flightscan;
 
 import android.content.Context;
+import android.os.Build;
+import android.os.StrictMode;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Base64;
 import android.util.Log;
+import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
 import android.webkit.WebResourceRequest;
@@ -54,23 +57,47 @@ public class SearchKayak extends AppCompatActivity {
 
     private String lastUrl = null;
 
-    private String from = "KBP";
-    private String to = "ATL";
-    private String datefrom = "2018-04-21";
-    private String datereturn = "2018-04-29";
+    private String from = "pari";
+    private String to = "new y";
+    private String datefrom = "2018-04-23";
+    private String datereturn = "2018-04-28";
 
     List<String> resources = new LinkedList<String>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        if (android.os.Build.VERSION.SDK_INT > 9) {
+            StrictMode.ThreadPolicy policy = new StrictMode.ThreadPolicy.Builder().permitAll().build();
+            StrictMode.setThreadPolicy(policy);
+        }
+
         setContentView(R.layout.activity_search_kayak);
+
+        //get current location from web service
+
+        JSONObject location = getJSONObjectData("https://freegeoip.net/json/");
+
 
         WebView.setWebContentsDebuggingEnabled(true);
 
         WebView myWebView = (WebView) findViewById(R.id.webview);
         WebSettings webSettings = myWebView.getSettings();
         webSettings.setJavaScriptEnabled(true);
+
+        android.webkit.CookieManager cookieManager = CookieManager.getInstance();
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            cookieManager.removeAllCookies(new ValueCallback<Boolean>() {
+                // a callback which is executed when the cookies have been removed
+                @Override
+                public void onReceiveValue(Boolean aBoolean) {
+                    Log.d("COOKIE", "Cookie removed: " + aBoolean);
+                }
+            });
+        }
+        else cookieManager.removeAllCookie();
 
         myWebView.addJavascriptInterface(new WebAppInterface(this), "Android");
 
@@ -149,7 +176,7 @@ public class SearchKayak extends AppCompatActivity {
                             // Tell the browser to BASE64-decode the string into your script !!!
                             "script.innerHTML = window.atob('" + encoded + "');" +
                             "let as = parent.appendChild(script);" +
-                            ((execution != null) ? "return  setTimeout(function() {" + execution + "; }, 500); " : "" )+
+                            ((execution != null) ? "return  setTimeout(function() {" + execution + "; }, 2000); " : "" )+
                             "})()", new ValueCallback<String>(){
                             @Override
                             public void onReceiveValue(String s) {
@@ -163,8 +190,19 @@ public class SearchKayak extends AppCompatActivity {
             }
         });
 
-       // myWebView.loadUrl("http://www.kayak.com");
-        myWebView.loadUrl("https://www.skyscanner.net");
+        final Map<String, String> additionalHeaders = new HashMap<>();
+        additionalHeaders.put("Accept-Language", "en-US");
+        additionalHeaders.put("X-Requested-With", "");
+        try {
+            additionalHeaders.put("Geo-Country",location.getString("country_code"));
+            additionalHeaders.put("Geo-Position",location.getString("latitude") + "," + location.getString("longitude"));
+            additionalHeaders.put("X-Geo-Location","city=" + location.getString("city") +"; country="+location.getString("country_code"));
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+
+        // myWebView.loadUrl("http://www.kayak.com");
+        myWebView.loadUrl("https://www.skyscanner.net", additionalHeaders);
 
     }
 
@@ -224,7 +262,7 @@ public class SearchKayak extends AppCompatActivity {
         private void  sendJSONPDataToServer(String data) {
             URL url = null;
             try {
-                url = new URL("http://192.168.1.81:8080/flight/multiple");
+                url = new URL("http://194.31.46.184:9090/flightsapi/flight/multiple");
                 HttpURLConnection conn = (HttpURLConnection) url.openConnection();
                 conn.setReadTimeout(100000);
                 conn.setConnectTimeout(150000);
@@ -288,6 +326,56 @@ public class SearchKayak extends AppCompatActivity {
         }
 
 
+    }
+
+    private JSONObject getJSONObjectData(String urlString) {
+        URL url = null;
+        JSONObject obj = null;
+        try {
+            url = new URL(urlString);
+            HttpsURLConnection conn = (HttpsURLConnection) url.openConnection();
+            conn.setReadTimeout(100000);
+            conn.setConnectTimeout(150000);
+            conn.setRequestMethod("GET");
+            conn.addRequestProperty("Accept", "application/json");
+            conn.addRequestProperty("Content-Type", "application/json");
+            conn.connect();
+            String encoding = conn.getContentEncoding();
+
+            BufferedReader streamReader = new BufferedReader(new InputStreamReader(conn.getInputStream(), "UTF-8"));
+            StringBuilder responseStrBuilder = new StringBuilder();
+
+            String inputStr;
+            while ((inputStr = streamReader.readLine()) != null)
+                responseStrBuilder.append(inputStr);
+            String s = responseStrBuilder.toString();
+            try {
+                obj = new JSONObject(responseStrBuilder.toString());
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
+
+            if (obj != null) {
+                obj.length();
+                System.out.println("Response: " + obj.length() + " elements in JSON were received\n" + s );
+            } else {
+                //error - nothing got
+                System.out.println("Response code: " +  conn.getResponseCode());
+            }
+
+
+
+        } catch (MalformedURLException e) {
+            System.err.println("Response was: " + e.getMessage());
+        } catch (UnsupportedEncodingException e) {
+            System.err.println("Response was: " + e.getMessage());
+        } catch (ProtocolException e) {
+            System.err.println("Response was: " + e.getMessage());
+        } catch (IOException e) {
+            System.err.println("Response was: " + e.getMessage());
+        }
+
+        return obj;
     }
 
 }
